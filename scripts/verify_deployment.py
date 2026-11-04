@@ -29,10 +29,10 @@ def verify(report_dir):
     report_dir.mkdir(parents=True, exist_ok=True)
     project = 'ticketing-verify-' + uuid4().hex[:16]
     image = 'ticketing-verify-python:' + project
-    passwords = [secrets.token_hex(24), secrets.token_hex(24)]
+    passwords = [secrets.token_hex(24) for _ in range(5)]
     # 不继承开发库连接配置、Compose 覆盖文件或服务选择。
     env = {k: v for k, v in os.environ.items()
-           if not k.startswith(('COMPOSE_', 'POSTGRES_', 'TICKETING_', 'PG'))
+           if not k.startswith(('COMPOSE_', 'POSTGRES_', 'TICKETING_', 'WAREHOUSE_', 'PG'))
            and k != 'API_PORT'}
     env['COMPOSE_ANSI'] = 'never'
     summary = {'project': project, 'platform': platform.platform(),
@@ -46,8 +46,8 @@ def verify(report_dir):
     with tempfile.TemporaryDirectory(prefix=project + '-') as directory:
         checkout = Path(directory)
         # 与 Dockerfile 所需源码一致；不复制 .git、个人 .env、数据或验收产物。
-        for name in ('Dockerfile', 'compose.yaml', 'requirements.txt', '.dockerignore',
-                     'ticketing', 'migrations', 'seeds', 'tests', 'scripts'):
+        for name in ('Dockerfile', 'compose.yaml', 'requirements.txt', 'requirements-warehouse.txt', '.dockerignore',
+                     'ticketing', 'warehouse', 'docker', 'migrations', 'seeds', 'tests', 'scripts'):
             source = ROOT / name
             if source.is_dir():
                 shutil.copytree(source, checkout / name,
@@ -58,6 +58,9 @@ def verify(report_dir):
         config.write_text('\n'.join((
             'POSTGRES_DB=ticketing_verify', 'POSTGRES_USER=ticketing_admin',
             'POSTGRES_PASSWORD=' + passwords[0], 'TICKETING_APP_PASSWORD=' + passwords[1],
+            'WAREHOUSE_READER_PASSWORD=' + passwords[2],
+            'WAREHOUSE_WRITER_PASSWORD=' + passwords[3],
+            'WAREHOUSE_REPORTER_PASSWORD=' + passwords[4],
             'POSTGRES_PORT=0', 'API_PORT=0', 'TICKETING_IMAGE=' + image, '')))
         config.chmod(0o600)
         compose = ['docker', 'compose', '--project-name', project,
@@ -99,8 +102,17 @@ def verify(report_dir):
             dc('postgres-start', 'up', '-d', '--wait', '--wait-timeout', '120', 'postgres')
             dc('initialize', 'run', '--rm', '-T', 'db-admin')
             dc('initialize-again', 'run', '--rm', '-T', 'db-admin')
-            require(sql('migration-count', 'SELECT count(*) FROM schema_migration;') == '5',
+            expected_migrations = len(list((checkout / 'migrations').glob('[0-9][0-9][0-9]_*.sql')))
+            require(sql('migration-count', 'SELECT count(*) FROM schema_migration;') == str(expected_migrations),
                     '迁移版本数量不符')
+            warehouse = json.loads(dc('warehouse-init', '--profile', 'warehouse', 'run', '--rm', '-T', 'warehouse-admin').stdout)
+            repeated = json.loads(dc('warehouse-init-again', '--profile', 'warehouse', 'run', '--rm', '-T', 'warehouse-admin').stdout)
+            require(warehouse == repeated and warehouse['status'] == 'ready', '数仓账号重复初始化结果不一致')
+            require(sql('warehouse-restricted-source',
+                        "SELECT has_table_privilege('ticketing_wh_reader','booking_order','SELECT') "
+                        "AND NOT has_table_privilege('ticketing_wh_reader','auth_credential','SELECT') "
+                        "AND NOT has_table_privilege('ticketing_wh_reader','booking_order','UPDATE');") == 't',
+                    '数仓来源账号权限不符')
             first = json.loads(dc('seed', 'run', '--rm', '-T', 'db-admin', 'demo').stdout)
             second = json.loads(dc('seed-again', 'run', '--rm', '-T', 'db-admin', 'demo').stdout)
             require(first['session_ids'] == second['session_ids'], '重复初始化产生额外场次')
@@ -137,7 +149,8 @@ def verify(report_dir):
                 time.sleep(1)
             require(sql('worker-inventory', f'SELECT status FROM session_seat WHERE session_seat_id={int(seat)};') == 'AVAILABLE',
                     '过期订单未释放座位')
-            summary.update(status='passed', migration_count=5, seed_idempotent=True,
+            summary.update(status='passed', migration_count=expected_migrations, seed_idempotent=True,
+                           warehouse_foundation='passed',
                            http_payment_refund_resale='passed', worker_expiration='passed')
         except Exception as exc:
             summary['error'] = sanitize(str(exc))

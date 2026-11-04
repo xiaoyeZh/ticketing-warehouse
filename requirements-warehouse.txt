@@ -1,0 +1,6 @@
+# 数仓镜像独立安装，不并入购票应用依赖。
+pyspark==4.0.1
+py4j==0.10.9.9
+pyarrow==21.0.0
+psycopg[binary]==3.2.13
+typing-extensions==4.16.0

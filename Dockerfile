@@ -4,6 +4,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY ticketing ./ticketing
+COPY warehouse ./warehouse
 COPY migrations ./migrations
 COPY seeds ./seeds
 COPY tests ./tests

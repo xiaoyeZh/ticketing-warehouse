@@ -1,0 +1,24 @@
+{
+  "version": "sales-v1",
+  "business_timezone": "Asia/Shanghai",
+  "storage_timezone": "UTC",
+  "fact_grain": "one successfully sold ticket, uniquely identified by ticket_id",
+  "aggregate_grain": ["paid_date", "session_id"],
+  "event_time": "booking_order.paid_at",
+  "source_tables": [
+    "booking_order", "booking_item", "payment_attempt", "ticket",
+    "activity_session", "activity", "venue"
+  ],
+  "success_condition": "payment_attempt.status = 'SUCCEEDED' AND booking_order.paid_at IS NOT NULL",
+  "refunded_sales": "keep original sale; do not filter ticket.status or require current order.status = 'PAID'",
+  "amount_type": "decimal; never binary floating point",
+  "metrics": [
+    {"name": "sold_ticket_count", "label": "成功售票数", "formula": "COUNT(*) from unique ticket sale facts"},
+    {"name": "paid_order_count", "label": "成功支付订单数", "formula": "COUNT(DISTINCT order_id) in each paid_date/session_id group"},
+    {"name": "paid_amount", "label": "模拟支付金额", "formula": "SUM(booking_item.unit_price) from unique ticket sale facts"}
+  ],
+  "zero_amount_sales": "count tickets and orders normally; amount contributes zero",
+  "empty_result": "no aggregate rows; an overall total query returns counts 0 and decimal 0.00",
+  "freshness": "committed records visible in the source snapshot; not a historical end-of-day snapshot",
+  "reprocessing": "full snapshot and full history rebuild; same source batch and code version reproduce the same business result"
+}

@@ -10,3 +10,6 @@ backups
 data
 docs
 artifacts
+spark-warehouse
+metastore_db
+derby.log

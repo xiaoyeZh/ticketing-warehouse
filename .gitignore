@@ -228,3 +228,8 @@ __marimo__/
 backups/
 data/generated/
 artifacts/
+
+# Spark 本地临时目录；ODS/DWD 数据使用 Compose 的 warehouse_data 卷。
+spark-warehouse/
+metastore_db/
+derby.log

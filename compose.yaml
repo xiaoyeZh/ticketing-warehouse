@@ -97,5 +97,39 @@ services:
       postgres:
         condition: service_healthy
 
+  warehouse:
+    image: ${WAREHOUSE_IMAGE:-ticketing-warehouse-spark:local}
+    build:
+      context: .
+      dockerfile: docker/warehouse.Dockerfile
+    profiles: [warehouse]
+    init: true
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:-ticketing}
+      WAREHOUSE_READER_PASSWORD: ${WAREHOUSE_READER_PASSWORD:-}
+      WAREHOUSE_WRITER_PASSWORD: ${WAREHOUSE_WRITER_PASSWORD:-}
+      WAREHOUSE_DATA_DIR: /warehouse-data
+    volumes:
+      - warehouse_data:/warehouse-data
+    command: [--help]
+
+  warehouse-admin:
+    image: ${TICKETING_IMAGE:-ticketing-warehouse-python:local}
+    build: .
+    profiles: [warehouse]
+    environment:
+      <<: *admin_environment
+      WAREHOUSE_READER_PASSWORD: ${WAREHOUSE_READER_PASSWORD:-}
+      WAREHOUSE_WRITER_PASSWORD: ${WAREHOUSE_WRITER_PASSWORD:-}
+      WAREHOUSE_REPORTER_PASSWORD: ${WAREHOUSE_REPORTER_PASSWORD:-}
+    entrypoint: [python, -m, warehouse]
+    command: [init-db]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pg_data:
+  warehouse_data:
