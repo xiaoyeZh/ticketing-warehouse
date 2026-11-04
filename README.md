@@ -231,6 +231,7 @@ POSTGRES_* 初始化账号和库名只在首次创建数据卷时生效，之后
 - [轻量前端、网页购票与响应式布局](docs/web/06_web.md)
 - [GitHub Actions、全新部署验收与开发顺序](docs/development/07_ci_deployment.md)
 - [第八阶段：销售指标口径、独立 Spark 环境与数仓账号](docs/warehouse/08_offline_sales.md)
+- [第八阶段前两步实现讲解：命令、Spark 样例、迁移与账号权限](docs/warehouse/08_implementation_walkthrough.md)
 
 票务功能已在 macOS / Apple Silicon ARM64 和 GitHub Actions Ubuntu 24.04 / AMD64 验证。
 新增 Spark 环境已在本地 ARM64 验证，并已配置 Ubuntu AMD64 CI 检查；远端结果以本分支 CI 为准。
