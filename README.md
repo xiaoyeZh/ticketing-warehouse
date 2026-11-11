@@ -9,6 +9,8 @@
 离线数仓已完成第八阶段前四步：指标口径、独立 Spark 环境与账号、七表 ODS 抽取和校验，以及 Spark 日期/场次维度与票级销售事实加工；日报汇总和报表发布尚未实现。
 第一版不包含检票与核销；支付和退款为本地同步模拟，不发生真实资金交易。
 
+数仓当前开发分支为 `codex/offline-warehouse`（原 `codex/warehouse-stage8`），继续承载离线数仓的维度建模、日报汇总和报表发布工作。阶段说明见 [离线销售数仓](docs/warehouse/08_offline_sales.md)。
+
 ## 本地快速部署
 
 需要 Git、已运行的 Docker Desktop（或 Docker Engine + Compose v2）以及首次下载镜像的网络。

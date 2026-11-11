@@ -151,12 +151,13 @@ python3 scripts/verify_deployment.py
 
 ## 分支和版本回溯
 
-本阶段从 `main` 的 `085ad70cefbddb3705f83c6ae957c8c97b0adcd2` 开始，工作分支为 `codex/warehouse-stage8`。
+本阶段从 `main` 的 `085ad70cefbddb3705f83c6ae957c8c97b0adcd2` 开始，当前工作分支为 `codex/offline-warehouse`。
+该分支原名为 `codex/warehouse-stage8`，重命名保留了已有的提交历史；历史验证记录中的分支名对应验证发生时的名称。
 完成并提交本分支改动后，可以切换查看：
 
 ```bash
 git switch main
-git switch codex/warehouse-stage8
+git switch codex/offline-warehouse
 ```
 
 未提交的改动不属于某个分支的已保存历史，切换前应提交或妥善保留。不要用强制重置来切换版本。

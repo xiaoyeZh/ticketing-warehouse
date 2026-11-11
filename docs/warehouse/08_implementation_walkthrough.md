@@ -1,6 +1,6 @@
 # 第八阶段前两步：实现讲解
 
-本篇对应 `codex/warehouse-stage8` 分支中已经完成的指标口径和独立运行环境。
+本篇对应 `codex/offline-warehouse`（原 `codex/warehouse-stage8`）分支中已经完成的指标口径和独立运行环境。
 [阶段说明](08_offline_sales.md)用于查指标、命令和权限，本篇按代码的实际执行顺序解释它们如何配合。
 
 本篇记录前两步的基础实现。第三步现已增加真实 ODS 抽取与批次校验，见 [七表一致性抽取](08_ods_extract.md)；下文的三个入口和空 schema 描述指基础阶段的状态。
