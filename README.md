@@ -6,7 +6,7 @@
 
 已完成 Docker + PostgreSQL、十四张业务与认证表、下单锁座、模拟支付、出票、退款、FastAPI 接口和注册登录。已提供蓝色主题的轻量购票页面，CLI、HTTP 和网页均可演示交易流程。
 提供迁移登记、可重复样例、受限应用数据库账号，以及真实 PostgreSQL 双连接并发验证。
-离线数仓已完成第八阶段前两步：销售指标口径、独立 Spark 运行环境和受限账号初始化；真实数据抽取、加工和报表尚未实现。
+离线数仓已完成第八阶段前三步：销售指标口径、独立 Spark 环境、受限账号和七表一致性 ODS 抽取与校验；业务加工和报表尚未实现。
 第一版不包含检票与核销；支付和退款为本地同步模拟，不发生真实资金交易。
 
 ## 本地快速部署
@@ -47,8 +47,9 @@ docker compose --profile workers up -d --wait --wait-timeout 120 api reservation
 | `app` | 下单、模拟支付、退款、查询和清理 CLI | 按需运行，使用 ticketing_app |
 | `reservation-worker` | 每五秒处理过期订单 | workers profile，可常驻 |
 | `tests` | 独立临时数据库中的集成测试 | 按需运行 |
-| `warehouse` | 独立 Spark 环境检查与指标契约 | warehouse profile，按需运行 |
+| `warehouse` | 指标契约、Spark 检查、七表 ODS 抽取与批次验证 | warehouse profile，按需运行 |
 | `warehouse-admin` | 数仓命名空间和三类受限账号初始化 | warehouse profile，管理员按需运行 |
+| `warehouse-tests` | 独立数据库中的 ODS 抽取、文件校验和故障边界测试 | warehouse profile，按需运行 |
 
 Python 镜像固定为 3.12.16-slim-bookworm；Psycopg 3.2.13。
 应用数据库账号没有建表、删除交易记录或修改用户角色权限。HTTP 订单接口从登录令牌识别用户，不能指定他人的用户编号。CLI 保留为本地教学工具。
@@ -165,6 +166,7 @@ docker compose --profile workers up -d --build reservation-worker
 | 004 | 模拟支付、电子票、退款与已售库存归属 |
 | 005 | Argon2id 登录凭据和可过期、可撤销的会话 |
 | 006 | 数仓 wh_meta、dws、ads 空命名空间 |
+| 007 | ODS 全量一致性抽取批次技术表 |
 
 `db-admin demo` 保留历史场次，创建或复用未来演示场次和两个普通用户。
 重复运行不重置已有价格或占用状态；没有未来演示场次时创建新的未来场次。
@@ -216,7 +218,7 @@ docker compose exec postgres psql -U ticketing_admin -d ticketing
 ```
 
 psql 中用 `\dt` 列表，`\d booking_order` 查看结构，`\q` 退出。
-现在有十四张业务与认证表及 schema_migration 技术表。
+现在有十四张业务与认证表，以及 schema_migration、wh_meta.extract_batch 技术表。
 数据库文件保存在 ticketing-warehouse_pg_data 命名卷中；重建容器保留数据，备份仍需单独进行。
 日常停止使用 docker compose stop；docker compose down 保留命名卷，down -v 则会删除数据卷。
 POSTGRES_* 初始化账号和库名只在首次创建数据卷时生效，之后修改 .env 不会自动修改已有管理员密码。
@@ -232,10 +234,11 @@ POSTGRES_* 初始化账号和库名只在首次创建数据卷时生效，之后
 - [GitHub Actions、全新部署验收与开发顺序](docs/development/07_ci_deployment.md)
 - [第八阶段：销售指标口径、独立 Spark 环境与数仓账号](docs/warehouse/08_offline_sales.md)
 - [第八阶段前两步实现讲解：命令、Spark 样例、迁移与账号权限](docs/warehouse/08_implementation_walkthrough.md)
+- [第八阶段第三步：七表一致性抽取、Parquet 清单和批次校验](docs/warehouse/08_ods_extract.md)
 
 票务功能已在 macOS / Apple Silicon ARM64 和 GitHub Actions Ubuntu 24.04 / AMD64 验证。
 新增 Spark 环境已在本地 ARM64 验证，并已配置 Ubuntu AMD64 CI 检查；远端结果以本分支 CI 为准。
-第八阶段前两步的测试与初始化记录见 [验证文档](docs/verification/stage8-foundation.md)。其他宿主系统尚未进行运行验证。
+第八阶段前两步见 [基础验证](docs/verification/stage8-foundation.md)，第三步的 80 项测试与真实抽取见 [抽取验证](docs/verification/stage8-extract.md)。其他宿主系统尚未进行运行验证。
 首次拉取官方镜像遇到连接中断时，可检查 Docker Desktop 网络或代理后重试构建。
 
 ## Anaconda 本地开发

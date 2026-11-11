@@ -102,6 +102,7 @@ services:
     build:
       context: .
       dockerfile: docker/warehouse.Dockerfile
+      target: runtime
     profiles: [warehouse]
     init: true
     environment:
@@ -126,6 +127,19 @@ services:
       WAREHOUSE_REPORTER_PASSWORD: ${WAREHOUSE_REPORTER_PASSWORD:-}
     entrypoint: [python, -m, warehouse]
     command: [init-db]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  warehouse-tests:
+    image: ${WAREHOUSE_TEST_IMAGE:-ticketing-warehouse-tests:local}
+    build:
+      context: .
+      dockerfile: docker/warehouse.Dockerfile
+      target: tests
+    profiles: [warehouse]
+    init: true
+    environment: *admin_environment
     depends_on:
       postgres:
         condition: service_healthy

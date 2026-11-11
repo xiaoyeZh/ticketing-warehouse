@@ -3,9 +3,11 @@
 本篇对应 `codex/warehouse-stage8` 分支中已经完成的指标口径和独立运行环境。
 [阶段说明](08_offline_sales.md)用于查指标、命令和权限，本篇按代码的实际执行顺序解释它们如何配合。
 
+本篇记录前两步的基础实现。第三步现已增加真实 ODS 抽取与批次校验，见 [七表一致性抽取](08_ods_extract.md)；下文的三个入口和空 schema 描述指基础阶段的状态。
+
 ## 1. 当前程序已经能做什么
 
-当前有三个可执行入口：
+基础阶段有三个可执行入口：
 
 | 命令 | 解决的问题 | 实际执行内容 |
 |---|---|---|
@@ -27,7 +29,7 @@ flowchart TD
     E --> H["迁移命名空间、配置账号和授权"]
 ```
 
-入口代码见 [warehouse/__main__.py](../../warehouse/__main__.py)。`argparse` 限定了当前三个子命令，输入尚未实现的 `run`、`replay` 或 `report` 会被拒绝。
+入口代码见 [warehouse/__main__.py](../../warehouse/__main__.py)。目前 argparse 在上述入口外还支持 extract、verify-batch，输入尚未实现的 `run`、`replay` 或 `report` 会被拒绝。
 `runtime` 只在执行 `check-env` 时导入，管理员初始化也只在对应分支导入，因此查看指标和初始化账号不需要先启动 Spark。
 
 ## 2. 指标规则如何变成可共用的契约

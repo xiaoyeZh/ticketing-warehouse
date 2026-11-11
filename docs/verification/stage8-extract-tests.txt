@@ -1,0 +1,31 @@
+应用迁移: 001_core_tables.sql
+应用迁移: 002_session_seat.sql
+应用迁移: 003_booking_orders.sql
+应用迁移: 004_payment_refund.sql
+应用迁移: 005_api_auth.sql
+应用迁移: 006_warehouse_foundation.sql
+应用迁移: 007_warehouse_extract.sql
+ Container ticketing-verify-e940d6e4a5cc4f52-postgres-1  Running
+test_cli_extract_and_verify_use_restricted_roles (test_extract.ExtractionTests.test_cli_extract_and_verify_use_restricted_roles) ... ok
+test_corrupt_data_file_is_rejected (test_extract.ExtractionTests.test_corrupt_data_file_is_rejected) ... ok
+test_corrupt_manifest_is_rejected (test_extract.ExtractionTests.test_corrupt_manifest_is_rejected) ... ok
+test_empty_database_has_typed_empty_files (test_extract.ExtractionTests.test_empty_database_has_typed_empty_files) ... ok
+test_failure_after_rename_never_publishes_or_deletes_final_directory (test_extract.ExtractionTests.test_failure_after_rename_never_publishes_or_deletes_final_directory) ... ok
+test_failure_during_export_marks_failed_and_cleans_partial_files (test_extract.ExtractionTests.test_failure_during_export_marks_failed_and_cleans_partial_files) ... ok
+test_invalid_chunk_size_registers_no_batch (test_extract.ExtractionTests.test_invalid_chunk_size_registers_no_batch) ... ok
+test_lost_success_acknowledgement_is_resolved_without_downgrade (test_extract.ExtractionTests.test_lost_success_acknowledgement_is_resolved_without_downgrade) ... ok
+test_manifest_cannot_redirect_to_another_path_even_with_matching_hash (test_extract.ExtractionTests.test_manifest_cannot_redirect_to_another_path_even_with_matching_hash) ... ok
+test_new_run_does_not_overwrite_previous_files (test_extract.ExtractionTests.test_new_run_does_not_overwrite_previous_files) ... ok
+test_payment_committing_between_table_reads_does_not_mix_snapshots (test_extract.ExtractionTests.test_payment_committing_between_table_reads_does_not_mix_snapshots) ... ok
+test_refunded_sales_and_failed_attempts_remain_raw (test_extract.ExtractionTests.test_refunded_sales_and_failed_attempts_remain_raw) ... ok
+test_schema_drift_stops_batch (test_extract.ExtractionTests.test_schema_drift_stops_batch) ... ok
+test_seven_tables_types_counts_and_reference_totals (test_extract.ExtractionTests.test_seven_tables_types_counts_and_reference_totals) ... ok
+test_source_connection_really_is_read_only (test_extract.ExtractionTests.test_source_connection_really_is_read_only) ... ok
+test_unknown_publication_status_remains_non_consumable (test_extract.ExtractionTests.test_unknown_publication_status_remains_non_consumable) ... ok
+test_uuid_collision_does_not_change_existing_success (test_extract.ExtractionTests.test_uuid_collision_does_not_change_existing_success) ... ok
+test_zero_amount_sale_and_utc_boundary_preserved (test_extract.ExtractionTests.test_zero_amount_sale_and_utc_boundary_preserved) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 2.520s
+
+OK

@@ -4,15 +4,16 @@
 
 ## 当前已实现的范围
 
-本次实现第一步（指标口径）和第二步（独立代码、运行环境和账号）。
+目前已实现第一步（指标口径）、第二步（独立代码、运行环境和账号）及第三步（七表一致性抽取）。
 
 - 指标契约：`warehouse/contracts/sales_metrics.json`，版本 `sales-v1`。
-- 命令：`metrics`、`check-env`、管理员专用的 `init-db`。
+- 命令：`metrics`、`check-env`、管理员专用的 `init-db`、`extract`、`verify-batch`。
 - 独立 Spark 镜像、数据卷和三类数据库账号。
 - 006 迁移只创建 `wh_meta`、`dws`、`ads` 命名空间，不创建销售数据表，不修改业务记录。
+- 007 迁移新增 `wh_meta.extract_batch` 技术表；抽取生成七张来源表的 Parquet、清单、参考合计和校验值。详见 [第三步实现讲解](08_ods_extract.md)。
 
-后续第三步实现一致性抽取，第四步生成维度和票级销售明细，第五步汇总发布，第六步完成业务加工验收。
-`run`、`replay`、`report` 尚未实现。当前不会生成真实销售报表。
+接下来第四步生成维度和票级销售明细，第五步汇总发布，第六步完成业务加工验收。
+`run`、`replay`、`report` 尚未实现。当前可以保存真实原始批次，尚不生成销售报表。
 
 ## 第一步：sales-v1 指标字典
 
@@ -128,7 +129,7 @@ docker compose --profile warehouse run --rm --build warehouse-admin
 | ticketing_wh_writer | wh_meta、dws 中表的 SELECT/INSERT/UPDATE/DELETE，以及所需序列使用 | 读写业务表、建表、管理角色、修改 ADS 视图 |
 | ticketing_wh_reporter | ads 中视图/表 SELECT | 访问底层汇总、来源表或写数据 |
 
-第一版只有空命名空间，尚无可写的任务表和可读的报表视图。默认权限已为后续对象配置。
+第三步已新增批次登记技术表；dws、ads 仍无汇总表和报表视图。默认权限已为后续对象配置。
 后续迁移须继续由同一个初始化管理员创建对象；更换对象创建者时，需要重新配置该创建者的默认权限。
 重复初始化复用本项目标记的账号；遇到未标记账号、特权账号或额外角色成员关系时停止，整个授权事务回滚。
 
@@ -141,6 +142,9 @@ python3 scripts/verify_deployment.py
 
 新增权限集成测试使用随机账号与独立临时数据库，验证未来新对象的授权、越权被拒绝、初始化幂等和冲突回滚。
 测试不改动开发库数仓账号的密码。部署验收使用临时 Compose 项目并清理自己的资源。
+
+抽取测试使用独立数仓测试镜像：`docker compose --profile warehouse run --rm --build warehouse-tests`。
+完整抽取与部署验收使用 `python3 scripts/verify_deployment.py --warehouse`。
 
 本地完整验证和初始化记录见 [第八阶段前两步验证](../verification/stage8-foundation.md)。
 
