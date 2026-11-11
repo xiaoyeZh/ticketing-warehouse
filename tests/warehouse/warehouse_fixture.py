@@ -38,6 +38,7 @@ class WarehouseFixture(BookingFixture):
         with self.admin() as conn:
             conn.execute('TRUNCATE public.app_user, public.venue CASCADE')
             conn.execute('TRUNCATE wh_meta.extract_batch CASCADE')
+            conn.execute("INSERT INTO wh_meta.publication(name) VALUES ('session_sales_day')")
         super().setUp()
         self.temporary = tempfile.TemporaryDirectory(prefix='warehouse-test-')
         self.addCleanup(self.temporary.cleanup)

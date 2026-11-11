@@ -2,7 +2,7 @@
 
 本步读取第三步已成功保存、校验通过的 ODS 批次，用真实 Spark SQL 生成 dim_date、dim_session、dwd_ticket_sale 三个 Parquet 数据集。
 PostgreSQL 新增的是 wh_meta.transform_run 技术表；维度和销售明细当前存于数据卷，还没有加载为 PostgreSQL 业务分析表。
-按日汇总、ADS 报表和正式发布指针留到第五步。
+按日汇总、ADS 报表和正式发布指针已在 [第五步](08_sales_publication.md) 实现，本篇只讲第四步的建模文件。
 
 ## 1. 如何运行
 
@@ -171,4 +171,4 @@ python3 scripts/verify_deployment.py --warehouse
 
 完整部署验收还经 CLI 对同一个来源批次加工两次并验证三表，继续回归原票务流程。
 第三步的 60e307e 已推送并通过 [远端 CI](https://github.com/xiaoyeZh/ticketing-warehouse/actions/runs/42992639546)；本步 95 项测试与开发库三表结果见 [第四步验证记录](../verification/stage8-model.md)。
-当前还没有每日场次汇总、ADS 视图发布、退款净额事实或 Airflow 调度。
+每日场次汇总与 ADS 视图发布见第五步，完整运行和重跑见 [第六步](08_pipeline.md)。当前指标仍保留原销售，不提供退款净额事实或 Airflow 调度。

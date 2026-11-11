@@ -125,7 +125,7 @@ def verify(report_dir, *, include_warehouse=False):
                 environment = json.loads(command('warehouse-environment', ['docker', 'run', '--rm',
                     '--network', 'none', '--hostname', 'localhost', warehouse_image, 'check-env']).stdout)
                 require(environment['status'] == 'passed', 'Spark 环境验证失败')
-                dc('warehouse-tests', '--profile', 'warehouse', 'run', '--rm', '-T', 'warehouse-tests', timeout=600)
+                dc('warehouse-tests', '--profile', 'warehouse', 'run', '--rm', '-T', 'warehouse-tests', timeout=1200)
             for filename in ('001_core_tables.sql', '002_session_seat.sql'):
                 sql('sql-' + filename, (checkout / 'tests/sql' / filename).read_text())
             require(sql('test-database-cleanup',
@@ -146,24 +146,44 @@ def verify(report_dir, *, include_warehouse=False):
             receipt = api_demo(base_url)
             (report_dir / 'http-demo.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2))
             if include_warehouse:
-                extracted = [json.loads(dc(f'warehouse-extract-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
-                    'warehouse', 'extract', '--chunk-size', '1').stdout) for i in (1, 2)]
-                require(all(batch['status'] == 'SUCCEEDED' for batch in extracted), 'ODS 抽取失败')
-                require(extracted[0]['source_batch_id'] != extracted[1]['source_batch_id'], '新抽取覆盖旧批次')
-                for i, batch in enumerate(extracted, 1):
-                    verified = json.loads(dc(f'warehouse-verify-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
-                        'warehouse', 'verify-batch', '--batch', batch['source_batch_id']).stdout)
-                    require(verified['files_verified'] == 7, 'ODS 批次校验失败')
-                modeled = [json.loads(dc(f'warehouse-transform-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
-                    'warehouse', 'transform', '--source-batch', extracted[0]['source_batch_id'], timeout=300).stdout) for i in (1, 2)]
-                require(all(run['status'] == 'SUCCEEDED' for run in modeled), 'Spark 业务加工失败')
-                require(modeled[0]['run_id'] != modeled[1]['run_id'], '加工重跑覆盖旧结果')
-                require(all(run['measured_totals'] == extracted[0]['reference_totals'] for run in modeled), '加工与来源合计不平')
-                for i, run in enumerate(modeled, 1):
-                    checked = json.loads(dc(f'warehouse-verify-transform-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
-                        'warehouse', 'verify-transform', '--run', run['run_id']).stdout)
-                    require(checked['tables_verified'] == 3, '加工结果文件校验失败')
-                summary.update(warehouse_extraction='passed', warehouse_environment='passed', warehouse_transformation='passed')
+                def wh(label, *args, service='warehouse', timeout=300):
+                    return json.loads(dc(label, '--profile', 'warehouse', 'run', '--rm', '-T',
+                                         service, *args, timeout=timeout).stdout)
+                full = wh('warehouse-full-run', 'run')
+                require(full['status'] == 'SUCCEEDED' and full['stage'] == 'DONE', '完整流水线未完成')
+                source = wh('warehouse-verify-source', 'verify-batch', '--batch', full['source_batch_id'])
+                require(source['files_verified'] == 7, 'ODS 校验失败')
+                replayed = wh('warehouse-replay', 'replay', '--source-batch', full['source_batch_id'])
+                require(replayed['status'] == 'SUCCEEDED' and not replayed['publish_requested'], '重跑默认不应发布')
+                require(full['transform_run_id'] != replayed['transform_run_id']
+                        and full['aggregate_run_id'] != replayed['aggregate_run_id'], '重跑覆盖了原结果')
+                require(full['measured_totals'] == replayed['measured_totals'] == source['reference_totals'], '全链路合计不平')
+                daily = []
+                for i, run in enumerate((full, replayed), 1):
+                    checked = wh(f'warehouse-verify-transform-{i}', 'verify-transform', '--run', run['transform_run_id'])
+                    require(checked['tables_verified'] == 3, '加工结果校验失败')
+                    daily.append(wh(f'warehouse-verify-aggregate-{i}', 'verify-aggregate', '--run', run['aggregate_run_id']))
+                require(daily[0]['data_sha256'] == daily[1]['data_sha256'], '相同 ODS 的日报重跑不一致')
+                before = wh('warehouse-report-before', service='warehouse-report')
+                require(before['publication']['aggregate_run_id'] == full['aggregate_run_id'], '验证重跑意外替换了报表')
+                published = wh('warehouse-publish-replay', 'publish', '--run', replayed['aggregate_run_id'],
+                               '--expected-generation', str(before['publication']['generation']))
+                repeated = wh('warehouse-publish-again', 'publish', '--run', replayed['aggregate_run_id'])
+                require(published == repeated, '重复发布不幂等')
+                report = wh('warehouse-report', service='warehouse-report')
+                require(report['totals'] == source['reference_totals']
+                        and report['publication']['aggregate_run_id'] == replayed['aggregate_run_id'], '报表未展示完整新批次')
+                empty = wh('warehouse-report-empty', 'report', '--start-date', '1900-01-01', '--end-date', '1900-01-02',
+                           service='warehouse-report')
+                require(empty['rows'] == [] and empty['totals'] ==
+                        {'sold_ticket_count':0,'paid_order_count':0,'paid_amount':'0.00'}, '空区间报表不正确')
+                status = wh('warehouse-pipeline-status', 'pipeline-status', '--run', full['run_id'])
+                require(status == full, '流水线记录与回执不一致')
+                checked_source = wh('warehouse-source-unchanged', 'verify-batch', '--batch', full['source_batch_id'])
+                require(checked_source['manifest_sha256'] == source['manifest_sha256'], '重跑修改了 ODS')
+                summary.update(warehouse_extraction='passed', warehouse_environment='passed', warehouse_transformation='passed',
+                               warehouse_aggregation='passed', warehouse_publication='passed', warehouse_replay='passed',
+                               warehouse_report='passed', warehouse_pipeline='passed')
             user = next(u['user_id'] for u in first['users'] if u['email'] == 'buyer-a@example.test')
             seat = receipt['inventory_ids'][0]
             order = cli('worker-reserve', 'reserve', '--user', str(user), '--session',
@@ -208,7 +228,7 @@ def verify(report_dir, *, include_warehouse=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report-dir', type=Path, default=ROOT / 'artifacts/deployment')
-    parser.add_argument('--warehouse', action='store_true', help='同时构建并验证 Spark 环境与 ODS 抽取')
+    parser.add_argument('--warehouse', action='store_true', help='同时验收 Spark、ODS、明细、日报发布、重跑和只读报表')
     args = parser.parse_args()
     try:
         print(json.dumps(verify(args.report_dir.resolve(), include_warehouse=args.warehouse), ensure_ascii=False, indent=2))

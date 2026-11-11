@@ -4,17 +4,18 @@
 
 ## 当前已实现的范围
 
-目前已实现前四步：指标口径、独立运行环境和账号、七表一致性抽取，以及 Spark 维度与票级销售事实加工。
+目前已实现六步：指标口径、独立运行环境和账号、七表一致性抽取、Spark 维度与票级事实、每日场次汇总与报表发布，以及完整运行/重跑和端到端验收。
 
 - 指标契约：`warehouse/contracts/sales_metrics.json`，版本 `sales-v1`。
-- 命令：`metrics`、`check-env`、管理员专用的 `init-db`、`extract`、`verify-batch`、`transform`、`verify-transform`。
+- 命令：`metrics`、`check-env`、管理员专用的 `init-db`、`extract`、`verify-batch`、`transform`、`verify-transform`、`aggregate`、`verify-aggregate`、`publish`、`report`、`run`、`replay`、`pipeline-status`。
 - 独立 Spark 镜像、数据卷和三类数据库账号。
 - 006 迁移只创建 `wh_meta`、`dws`、`ads` 命名空间，不创建销售数据表，不修改业务记录。
 - 007 迁移新增 `wh_meta.extract_batch` 技术表；抽取生成七张来源表的 Parquet、清单、参考合计和校验值。详见 [第三步实现讲解](08_ods_extract.md)。
 - 008 迁移新增 `wh_meta.transform_run`；Spark 生成 dim_date、dim_session、dwd_ticket_sale 三表 Parquet，并记录血缘与质量合计。详见 [第四步实现讲解](08_sales_model.md)。
 
-接下来第五步汇总发布，第六步完成汇总与报表验收。
-`run`、`replay`、`report` 尚未实现。当前有原始批次和维度/销售明细文件，尚不生成日报或发布报表。
+- 009 迁移新增版本化 DWS 日报、汇总/流水线记录、发布指针与事件、ADS 视图。详见 [第五步：日报汇总与发布](08_sales_publication.md) 和 [第六步：完整流水线与验收](08_pipeline.md)。
+
+日常使用 `docker compose --profile warehouse run --rm warehouse run` 生成并发布当前快照，使用 `docker compose --profile warehouse run --rm warehouse-report` 查询报表。
 
 ## 第一步：sales-v1 指标字典
 
@@ -36,7 +37,7 @@
 - 业务事件时间统一使用 `booking_order.paid_at`；尝试时间 `payment_attempt.created_at` 和出票时间 `ticket.issued_at` 另有含义，不用于这三个指标的日期归属。
 - 原始时间保存 UTC，业务日期统一转换为 Asia/Shanghai。日期范围采用本地日期的左闭右开区间。
 - 票级金额来自下单快照 `booking_item.unit_price`，不取现价，不把订单整单金额复制到每张票上。
-- 金额使用 Decimal/NUMERIC；票级拟使用 DECIMAL(18,2)，汇总拟使用 DECIMAL(28,2)。禁止经过 float。
+- 金额使用 Decimal/NUMERIC；票级使用 DECIMAL(18,2)，汇总使用 DECIMAL(28,2)。禁止经过 float。
 - 金额代表本项目模拟支付的原始数值；源系统尚未建模币种，不进行币种转换，也不将其标记为会计收入。
 
 ### 成功条件和特殊情况
@@ -57,7 +58,7 @@
 
 ### 后续加工的固定验收样例
 
-以下是加工完成后的期望值，当前环境检查不会生成这些报表。
+以下是加工与报表的固定验收期望；单独的 check-env 仍只验证环境，不生成业务报表。
 
 | 样例 | 成功售票数 | 成功支付订单数 | 模拟支付金额 |
 |---|---:|---:|---:|
@@ -87,7 +88,7 @@ UTC `2026-11-03 15:59:00+00` 归属上海 11 月 3 日，`16:00:00+00` 归属上
 依赖固定在 `requirements-warehouse.txt`。Java 的安全更新随 Debian 软件源安装，不声称镜像构建位级可复现。
 业务镜像只复制轻量数仓命令和契约；Java、Spark、PyArrow 安装在独立数仓镜像中。
 
-`warehouse/config.py`、`bootstrap.py` 管理连接和账号；`runtime.py` 提供离线环境检查；`warehouse/sql/` 预留后续加工 SQL。
+`warehouse/config.py`、`bootstrap.py` 管理连接和账号；`runtime.py` 提供离线环境检查；`warehouse/sql/` 保存维度、票级事实和每日场次汇总 SQL。
 
 ### 构建和离线检查
 
@@ -130,7 +131,7 @@ docker compose --profile warehouse run --rm --build warehouse-admin
 | ticketing_wh_writer | wh_meta、dws 中表的 SELECT/INSERT/UPDATE/DELETE，以及所需序列使用 | 读写业务表、建表、管理角色、修改 ADS 视图 |
 | ticketing_wh_reporter | ads 中视图/表 SELECT | 访问底层汇总、来源表或写数据 |
 
-第三、四步已新增抽取和加工批次技术表；dws、ads 仍无汇总表和报表视图。默认权限已为后续对象配置。
+第三至六步已新增抽取/加工/汇总/流水线技术表、DWS 日报和 ADS 视图；writer 负责装载与发布，reporter 通过独立 warehouse-report 服务查询。默认权限也覆盖后续对象。
 后续迁移须继续由同一个初始化管理员创建对象；更换对象创建者时，需要重新配置该创建者的默认权限。
 重复初始化复用本项目标记的账号；遇到未标记账号、特权账号或额外角色成员关系时停止，整个授权事务回滚。
 
@@ -145,7 +146,7 @@ python3 scripts/verify_deployment.py
 测试不改动开发库数仓账号的密码。部署验收使用临时 Compose 项目并清理自己的资源。
 
 抽取测试使用独立数仓测试镜像：`docker compose --profile warehouse run --rm --build warehouse-tests`。
-完整抽取与部署验收使用 `python3 scripts/verify_deployment.py --warehouse`。
+完整数仓与部署验收使用 `python3 scripts/verify_deployment.py --warehouse`，包含日报、原子发布、ODS 重跑和报表查询。
 
 本地完整验证和初始化记录见 [第八阶段前两步验证](../verification/stage8-foundation.md)。
 
@@ -162,7 +163,7 @@ git switch codex/offline-warehouse
 
 未提交的改动不属于某个分支的已保存历史，切换前应提交或妥善保留。不要用强制重置来切换版本。
 Git 保存代码，不保存 PostgreSQL 数据、Docker 数据卷、个人 `.env` 或 ODS 文件。
-切换旧代码不会自动撤销已执行的 006 迁移；本迁移仅新增空 schema，旧业务代码不使用它们。
+切换旧代码不会自动撤销已执行的 006～009 数仓迁移；这些迁移新增分析对象，旧业务代码不使用它们。
 需要恢复数据库历史状态时，另行使用对应备份，不能把切换分支当作数据库还原。
 
 ## 参考

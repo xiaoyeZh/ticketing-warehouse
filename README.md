@@ -6,7 +6,7 @@
 
 已完成 Docker + PostgreSQL、十四张业务与认证表、下单锁座、模拟支付、出票、退款、FastAPI 接口和注册登录。已提供蓝色主题的轻量购票页面，CLI、HTTP 和网页均可演示交易流程。
 提供迁移登记、可重复样例、受限应用数据库账号，以及真实 PostgreSQL 双连接并发验证。
-离线数仓已完成第八阶段前四步：指标口径、独立 Spark 环境与账号、七表 ODS 抽取和校验，以及 Spark 日期/场次维度与票级销售事实加工；日报汇总和报表发布尚未实现。
+离线数仓已完成第八阶段六步：指标口径、独立 Spark 环境与账号、七表 ODS、维度与票级销售事实、每日场次汇总和 ADS 发布，以及完整运行、ODS 重跑与报表验收。运行方法见 [完整流水线](docs/warehouse/08_pipeline.md)。
 第一版不包含检票与核销；支付和退款为本地同步模拟，不发生真实资金交易。
 
 数仓当前开发分支为 `codex/offline-warehouse`（原 `codex/warehouse-stage8`），继续承载离线数仓的维度建模、日报汇总和报表发布工作。阶段说明见 [离线销售数仓](docs/warehouse/08_offline_sales.md)。
@@ -49,9 +49,10 @@ docker compose --profile workers up -d --wait --wait-timeout 120 api reservation
 | `app` | 下单、模拟支付、退款、查询和清理 CLI | 按需运行，使用 ticketing_app |
 | `reservation-worker` | 每五秒处理过期订单 | workers profile，可常驻 |
 | `tests` | 独立临时数据库中的集成测试 | 按需运行 |
-| `warehouse` | 指标、ODS 抽取、Spark 销售建模与批次验证 | warehouse profile，按需运行 |
+| `warehouse` | ODS、Spark 建模/日报、发布、完整运行与重跑 | warehouse profile，按需运行 |
+| `warehouse-report` | 仅用 reporter 查询已发布的 ADS 日报 | warehouse profile，按需运行 |
 | `warehouse-admin` | 数仓命名空间和三类受限账号初始化 | warehouse profile，管理员按需运行 |
-| `warehouse-tests` | 独立数据库中的抽取、Spark 建模、对账和故障边界测试 | warehouse profile，按需运行 |
+| `warehouse-tests` | 独立数据库中的抽取、建模、日报发布、重跑与故障测试 | warehouse profile，按需运行 |
 
 Python 镜像固定为 3.12.16-slim-bookworm；Psycopg 3.2.13。
 应用数据库账号没有建表、删除交易记录或修改用户角色权限。HTTP 订单接口从登录令牌识别用户，不能指定他人的用户编号。CLI 保留为本地教学工具。
@@ -170,6 +171,7 @@ docker compose --profile workers up -d --build reservation-worker
 | 006 | 数仓 wh_meta、dws、ads 空命名空间 |
 | 007 | ODS 全量一致性抽取批次技术表 |
 | 008 | Spark 维度/销售明细加工批次、输入血缘与质量合计技术表 |
+| 009 | 版本化 DWS 日报、汇总/流水线记录、发布事件与 ADS 报表视图 |
 
 `db-admin demo` 保留历史场次，创建或复用未来演示场次和两个普通用户。
 重复运行不重置已有价格或占用状态；没有未来演示场次时创建新的未来场次。
@@ -221,7 +223,7 @@ docker compose exec postgres psql -U ticketing_admin -d ticketing
 ```
 
 psql 中用 `\dt` 列表，`\d booking_order` 查看结构，`\q` 退出。
-现在有十四张业务与认证表，以及 schema_migration、wh_meta.extract_batch、wh_meta.transform_run 技术表。
+现在有十四张业务与认证表，另有 schema_migration、wh_meta 批次/流水线/发布技术表、dws.session_sales_day 和两张 ADS 报表视图。
 数据库文件保存在 ticketing-warehouse_pg_data 命名卷中；重建容器保留数据，备份仍需单独进行。
 日常停止使用 docker compose stop；docker compose down 保留命名卷，down -v 则会删除数据卷。
 POSTGRES_* 初始化账号和库名只在首次创建数据卷时生效，之后修改 .env 不会自动修改已有管理员密码。
@@ -239,10 +241,13 @@ POSTGRES_* 初始化账号和库名只在首次创建数据卷时生效，之后
 - [第八阶段前两步实现讲解：命令、Spark 样例、迁移与账号权限](docs/warehouse/08_implementation_walkthrough.md)
 - [第八阶段第三步：七表一致性抽取、Parquet 清单和批次校验](docs/warehouse/08_ods_extract.md)
 - [第八阶段第四步：Spark 维度、票级销售事实、质量对账与血缘](docs/warehouse/08_sales_model.md)
+- [第八阶段第五步：每日场次汇总、原子发布与只读报表](docs/warehouse/08_sales_publication.md)
+- [第八阶段第六步：完整运行、ODS 重跑、状态追踪与验收](docs/warehouse/08_pipeline.md)
 
 票务功能已在 macOS / Apple Silicon ARM64 和 GitHub Actions Ubuntu 24.04 / AMD64 验证。
 新增 Spark 环境已在本地 ARM64 验证，并已配置 Ubuntu AMD64 CI 检查；远端结果以本分支 CI 为准。
 第八阶段前两步见 [基础验证](docs/verification/stage8-foundation.md)，第三步见 [抽取验证](docs/verification/stage8-extract.md)，第四步的 95 项本地测试与真实加工结果见 [销售建模验证](docs/verification/stage8-model.md)。其他宿主系统尚未进行运行验证。
+第五、六步的 114 项测试、完整流水线和开发库发布结果见 [日报与流水线验证](docs/verification/stage8-publish.md)。
 首次拉取官方镜像遇到连接中断时，可检查 Docker Desktop 网络或代理后重试构建。
 
 ## Anaconda 本地开发

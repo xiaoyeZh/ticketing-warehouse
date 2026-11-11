@@ -16,14 +16,14 @@ concurrency:
 
 jobs:
   warehouse-environment:
-    name: Warehouse extraction and sales modeling
+    name: Warehouse pipeline, publication and replay
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Verify Spark sales modeling, ODS, permissions and deployment
+      - name: Verify full warehouse pipeline, reports, replay and deployment
         run: python3 scripts/verify_deployment.py --warehouse
       - name: Save warehouse verification reports
         if: always()
