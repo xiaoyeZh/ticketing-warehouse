@@ -154,7 +154,16 @@ def verify(report_dir, *, include_warehouse=False):
                     verified = json.loads(dc(f'warehouse-verify-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
                         'warehouse', 'verify-batch', '--batch', batch['source_batch_id']).stdout)
                     require(verified['files_verified'] == 7, 'ODS 批次校验失败')
-                summary.update(warehouse_extraction='passed', warehouse_environment='passed')
+                modeled = [json.loads(dc(f'warehouse-transform-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
+                    'warehouse', 'transform', '--source-batch', extracted[0]['source_batch_id'], timeout=300).stdout) for i in (1, 2)]
+                require(all(run['status'] == 'SUCCEEDED' for run in modeled), 'Spark 业务加工失败')
+                require(modeled[0]['run_id'] != modeled[1]['run_id'], '加工重跑覆盖旧结果')
+                require(all(run['measured_totals'] == extracted[0]['reference_totals'] for run in modeled), '加工与来源合计不平')
+                for i, run in enumerate(modeled, 1):
+                    checked = json.loads(dc(f'warehouse-verify-transform-{i}', '--profile', 'warehouse', 'run', '--rm', '-T',
+                        'warehouse', 'verify-transform', '--run', run['run_id']).stdout)
+                    require(checked['tables_verified'] == 3, '加工结果文件校验失败')
+                summary.update(warehouse_extraction='passed', warehouse_environment='passed', warehouse_transformation='passed')
             user = next(u['user_id'] for u in first['users'] if u['email'] == 'buyer-a@example.test')
             seat = receipt['inventory_ids'][0]
             order = cli('worker-reserve', 'reserve', '--user', str(user), '--session',

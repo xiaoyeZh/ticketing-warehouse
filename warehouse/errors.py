@@ -6,3 +6,11 @@ class ExtractionError(RuntimeError):
         self.code = code
         self.batch_id = str(batch_id) if batch_id is not None else None
         super().__init__(code)
+
+
+class TransformationError(RuntimeError):
+    def __init__(self, code, source_batch_id=None, run_id=None):
+        self.code = code
+        self.source_batch_id = str(source_batch_id) if source_batch_id is not None else None
+        self.run_id = str(run_id) if run_id is not None else None
+        super().__init__(code)

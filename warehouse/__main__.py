@@ -8,11 +8,11 @@ from uuid import UUID
 import psycopg
 
 from .contracts import sales_contract
-from .errors import ExtractionError
+from .errors import ExtractionError, TransformationError
 
 
 def main():
-    parser = argparse.ArgumentParser(description='票务离线数仓：指标、运行环境与一致性抽取')
+    parser = argparse.ArgumentParser(description='票务离线数仓：指标、ODS 抽取与 Spark 销售建模')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('metrics', help='显示 sales-v1 指标契约，不访问数据库')
     commands.add_parser('check-env', help='用离线样例验证 Java、Spark、Decimal、时区和 Parquet')
@@ -21,6 +21,10 @@ def main():
     extraction.add_argument('--chunk-size', type=int, default=5000, help='每次读取的行数，1～100000')
     verification = commands.add_parser('verify-batch', help='验证成功批次的清单、文件校验值、类型和行数')
     verification.add_argument('--batch', type=UUID, required=True, help='抽取返回的 source_batch_id')
+    transformation = commands.add_parser('transform', help='用 Spark 将已验证 ODS 加工为维度和票级销售事实')
+    transformation.add_argument('--source-batch', type=UUID, required=True, help='成功的 ODS source_batch_id')
+    model_check = commands.add_parser('verify-transform', help='验证成功加工批次的血缘、清单和三表文件')
+    model_check.add_argument('--run', type=UUID, required=True, help='transform 返回的 run_id')
     args = parser.parse_args()
     try:
         if args.command == 'metrics':
@@ -34,11 +38,21 @@ def main():
         elif args.command == 'extract':
             from .extract import extract
             result = extract(chunk_size=args.chunk_size)
-        else:
+        elif args.command == 'verify-batch':
             from .extract import verify_batch
             result = verify_batch(args.batch)
+        elif args.command == 'transform':
+            from .transform import transform
+            result = transform(args.source_batch)
+        else:
+            from .transform import verify_transform
+            result = verify_transform(args.run)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
+    except TransformationError as exc:
+        print(json.dumps({'status': 'failed', 'error': exc.code, 'source_batch_id': exc.source_batch_id,
+                          'run_id': exc.run_id}, ensure_ascii=False), file=sys.stderr)
+        return 1
     except ExtractionError as exc:
         print(json.dumps({'status': 'failed', 'error': exc.code,
                           'source_batch_id': exc.batch_id}, ensure_ascii=False), file=sys.stderr)

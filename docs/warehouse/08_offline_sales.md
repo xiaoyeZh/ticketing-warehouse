@@ -4,16 +4,17 @@
 
 ## 当前已实现的范围
 
-目前已实现第一步（指标口径）、第二步（独立代码、运行环境和账号）及第三步（七表一致性抽取）。
+目前已实现前四步：指标口径、独立运行环境和账号、七表一致性抽取，以及 Spark 维度与票级销售事实加工。
 
 - 指标契约：`warehouse/contracts/sales_metrics.json`，版本 `sales-v1`。
-- 命令：`metrics`、`check-env`、管理员专用的 `init-db`、`extract`、`verify-batch`。
+- 命令：`metrics`、`check-env`、管理员专用的 `init-db`、`extract`、`verify-batch`、`transform`、`verify-transform`。
 - 独立 Spark 镜像、数据卷和三类数据库账号。
 - 006 迁移只创建 `wh_meta`、`dws`、`ads` 命名空间，不创建销售数据表，不修改业务记录。
 - 007 迁移新增 `wh_meta.extract_batch` 技术表；抽取生成七张来源表的 Parquet、清单、参考合计和校验值。详见 [第三步实现讲解](08_ods_extract.md)。
+- 008 迁移新增 `wh_meta.transform_run`；Spark 生成 dim_date、dim_session、dwd_ticket_sale 三表 Parquet，并记录血缘与质量合计。详见 [第四步实现讲解](08_sales_model.md)。
 
-接下来第四步生成维度和票级销售明细，第五步汇总发布，第六步完成业务加工验收。
-`run`、`replay`、`report` 尚未实现。当前可以保存真实原始批次，尚不生成销售报表。
+接下来第五步汇总发布，第六步完成汇总与报表验收。
+`run`、`replay`、`report` 尚未实现。当前有原始批次和维度/销售明细文件，尚不生成日报或发布报表。
 
 ## 第一步：sales-v1 指标字典
 
@@ -129,7 +130,7 @@ docker compose --profile warehouse run --rm --build warehouse-admin
 | ticketing_wh_writer | wh_meta、dws 中表的 SELECT/INSERT/UPDATE/DELETE，以及所需序列使用 | 读写业务表、建表、管理角色、修改 ADS 视图 |
 | ticketing_wh_reporter | ads 中视图/表 SELECT | 访问底层汇总、来源表或写数据 |
 
-第三步已新增批次登记技术表；dws、ads 仍无汇总表和报表视图。默认权限已为后续对象配置。
+第三、四步已新增抽取和加工批次技术表；dws、ads 仍无汇总表和报表视图。默认权限已为后续对象配置。
 后续迁移须继续由同一个初始化管理员创建对象；更换对象创建者时，需要重新配置该创建者的默认权限。
 重复初始化复用本项目标记的账号；遇到未标记账号、特权账号或额外角色成员关系时停止，整个授权事务回滚。
 
