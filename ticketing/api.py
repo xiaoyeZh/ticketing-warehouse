@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.exceptions import HTTPException as StarletteHTTPException
+import mimetypes
 import psycopg
 
 from .auth import AuthError, AuthService
@@ -88,6 +89,11 @@ def create_app(connect_factory=connect):
         return user['user_id']
 
     web_root = FilePath(__file__).resolve().parent / 'web'
+    # Windows 会用注册表覆盖 Python 内置 MIME 表，可能把 .mjs/.js 判成 text/plain，
+    # 导致浏览器拒绝加载 ES Module；这里显式登记，保证跨平台一致。
+    mimetypes.add_type('text/javascript', '.mjs')
+    mimetypes.add_type('text/javascript', '.js')
+    mimetypes.add_type('text/css', '.css')
     app.mount('/assets', StaticFiles(directory=web_root), name='web-assets')
 
     @app.middleware('http')
